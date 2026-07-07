@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Outreach Cockpit</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Archivo:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --ink:#15171C; --steel:#1B1E24; --steel-2:#262B33; --line:#D3D6DB;
+  --paper:#E9EAEC; --card:#FFFFFF; --muted:#6B7079;
+  --go:#2FA05A; --due:#E8A317; --hold:#5B6A85; --rest:#D23B3B; --closed:#9AA0A8;
+  --action:#15171C; --action-hover:#E8A317;
+}
+body{font-family:'Archivo',system-ui,sans-serif;color:var(--ink);background:var(--paper);min-height:100vh;-webkit-font-smoothing:antialiased;}
+.oc-mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+
+.oc-bar{background:var(--steel);color:#F3F4F6;padding:14px 20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;position:sticky;top:0;z-index:40;border-bottom:3px solid var(--action-hover);}
+.oc-logo{font-family:'Archivo Narrow',sans-serif;font-weight:700;letter-spacing:.06em;font-size:19px;text-transform:uppercase;display:flex;align-items:center;gap:10px;}
+.oc-logo .dot{width:11px;height:11px;border-radius:2px;background:var(--action-hover);box-shadow:0 0 0 3px rgba(232,163,23,.25);}
+.oc-tallies{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;}
+.oc-tally{font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 9px;border-radius:5px;background:var(--steel-2);display:flex;align-items:center;gap:6px;letter-spacing:.02em;}
+.oc-tally .n{font-weight:700;font-size:13px;}
+.oc-tally .lt{width:8px;height:8px;border-radius:50%;}
+
+.oc-shell{display:grid;grid-template-columns:1fr 420px;gap:0;max-width:1240px;margin:0 auto;}
+.oc-board{padding:18px 20px 60px;min-height:60vh;}
+.oc-pane{border-left:1px solid var(--line);background:#F4F5F6;padding:20px;min-height:calc(100vh - 56px);position:sticky;top:56px;align-self:start;}
+
+.oc-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+.oc-search{flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--line);border-radius:7px;background:var(--card);font-family:'Archivo',sans-serif;font-size:14px;}
+.oc-filters{display:flex;gap:6px;flex-wrap:wrap;}
+.oc-chip{font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 10px;border-radius:20px;border:1px solid var(--line);background:var(--card);cursor:pointer;letter-spacing:.02em;color:var(--muted);}
+.oc-chip.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+.oc-row{display:flex;align-items:stretch;background:var(--card);border:1px solid var(--line);border-radius:9px;margin-bottom:9px;overflow:hidden;cursor:pointer;transition:box-shadow .12s ease,transform .12s ease;}
+.oc-row:hover{box-shadow:0 4px 14px rgba(20,23,28,.09);transform:translateY(-1px);}
+.oc-row.sel{outline:2px solid var(--action-hover);outline-offset:-1px;}
+.oc-signal{width:8px;flex-shrink:0;}
+.oc-row-main{padding:12px 14px;flex:1;min-width:0;}
+.oc-row-top{display:flex;align-items:baseline;gap:8px;}
+.oc-name{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.oc-co{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.oc-row-meta{display:flex;gap:10px;margin-top:5px;align-items:center;flex-wrap:wrap;}
+.oc-flag{font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 6px;border-radius:4px;background:#EEF0F2;color:var(--muted);letter-spacing:.03em;text-transform:uppercase;}
+.oc-status-line{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.04em;padding:12px 14px;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;text-align:right;min-width:118px;border-left:1px dashed var(--line);}
+.oc-status-line .big{font-weight:700;}
+.oc-status-line .sub{color:var(--muted);font-size:10px;margin-top:2px;}
+
+.oc-empty{text-align:center;padding:56px 20px;color:var(--muted);}
+.oc-empty h3{font-family:'Archivo Narrow',sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--ink);font-size:20px;margin-bottom:8px;}
+.oc-empty p{max-width:360px;margin:0 auto 18px;font-size:14px;line-height:1.5;}
+
+.oc-btn{font-family:'Archivo',sans-serif;font-weight:600;font-size:14px;padding:10px 16px;border-radius:7px;border:1px solid var(--action);background:var(--action);color:#fff;cursor:pointer;transition:background .12s;text-decoration:none;display:inline-block;text-align:center;}
+.oc-btn:hover{background:#000;}
+.oc-btn.amber{background:var(--action-hover);border-color:var(--action-hover);color:var(--ink);}
+.oc-btn.amber:hover{background:#d69512;}
+.oc-btn.ghost{background:transparent;color:var(--ink);border-color:var(--line);}
+.oc-btn.ghost:hover{background:#EDEEF0;}
+.oc-btn.sm{padding:7px 11px;font-size:12.5px;}
+.oc-btn:disabled{opacity:.45;cursor:not-allowed;}
+.oc-btn:focus-visible,.oc-chip:focus-visible,.oc-search:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--action-hover);outline-offset:2px;}
+
+.oc-pane-h{font-family:'Archivo Narrow',sans-serif;text-transform:uppercase;letter-spacing:.05em;font-size:15px;font-weight:700;color:var(--ink);margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;}
+.oc-pane-sub{font-size:12.5px;color:var(--muted);margin-bottom:16px;}
+.oc-field{margin-bottom:14px;}
+.oc-field label{display:block;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+.oc-input,.oc-select,.oc-area{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:var(--card);font-family:'Archivo',sans-serif;font-size:14px;}
+.oc-area{resize:vertical;min-height:120px;line-height:1.5;}
+.oc-seg{display:flex;gap:6px;flex-wrap:wrap;}
+.oc-seg button{flex:1;min-width:64px;padding:8px 6px;border:1px solid var(--line);background:var(--card);border-radius:7px;font-size:12.5px;font-weight:500;cursor:pointer;font-family:'Archivo',sans-serif;}
+.oc-seg button.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+.oc-note{background:#FBF3DE;border:1px solid #E9CE82;color:#7A5B10;font-size:12.5px;padding:10px 12px;border-radius:7px;margin-bottom:14px;line-height:1.45;}
+.oc-note.stop{background:#FBE6E6;border-color:#E9A0A0;color:#912626;}
+.oc-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
+.oc-touch{border-top:1px solid var(--line);margin-top:18px;padding-top:14px;}
+.oc-touch h4{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.oc-touch-item{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink);padding:5px 0;border-bottom:1px dotted var(--line);display:flex;justify-content:space-between;gap:10px;}
+.oc-touch-item .g{color:var(--muted);}
+
+.oc-back{display:none;}
+.oc-spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.25);border-top-color:var(--ink);border-radius:50%;animation:ocspin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
+@keyframes ocspin{to{transform:rotate(360deg);}}
+
+@media (max-width:860px){
+  .oc-shell{grid-template-columns:1fr;}
+  .oc-pane{position:static;border-left:none;border-top:1px solid var(--line);min-height:auto;}
+  .oc-pane.hidden-m{display:none;}
+  .oc-board.hidden-m{display:none;}
+  .oc-back{display:inline-flex;}
+  .oc-status-line{min-width:96px;}
+}
+@media (prefers-reduced-motion:reduce){ .oc-row,.oc-btn,.oc-spin{transition:none;animation:none;} }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo } = React;
+
+const LANGS = { pt:"Portuguese (Brazil)", de:"German", pl:"Polish", en:"English", es:"Spanish", fr:"French", nl:"Dutch" };
+const FLAG = { pt:"🇧🇷", de:"🇩🇪", pl:"🇵🇱", en:"EN", es:"🇪🇸", fr:"🇫🇷", nl:"🇳🇱" };
+const GOALS = [{id:"intro",label:"First intro"},{id:"followup",label:"Follow-up"},{id:"offer",label:"Send offer"},{id:"reengage",label:"Re-engage"}];
+const TONES = [{id:"warm",label:"Warm"},{id:"direct",label:"Direct"},{id:"formal",label:"Formal"}];
+const DAY = 86400000;
+const now = () => Date.now();
+const daysSince = (ts) => (ts ? Math.floor((now()-ts)/DAY) : null);
+const fmtDate = (ts) => (ts ? new Date(ts).toLocaleDateString() : "—");
+const DEFAULTS = { senderName:"Duko", company:"Van Vliet Automotive", cadenceDays:7, maxFollowups:3, apiKey:"", model:"claude-sonnet-5" };
+
+// ---- localStorage helpers ----
+const load = (k, fallback) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+function signalFor(c, s){
+  const cad = c.cadenceDays || s.cadenceDays;
+  const ds = daysSince(c.lastContacted);
+  if (c.status==="won") return {key:"closed",color:"var(--closed)",big:"WON",sub:"deal closed",canSend:true,order:5};
+  if (c.status==="lost") return {key:"closed",color:"var(--closed)",big:"CLOSED",sub:"not proceeding",canSend:false,order:6};
+  if (c.status==="resting") return {key:"rest",color:"var(--rest)",big:"RESTING",sub:"backed off",canSend:false,order:4};
+  if (c.status==="replied"||c.status==="negotiating") return {key:"go",color:"var(--go)",big:"YOUR MOVE",sub:"they replied",canSend:true,order:0};
+  if (c.lastContacted && ds<cad) return {key:"hold",color:"var(--hold)",big:`HOLD ${cad-ds}d`,sub:`contacted ${ds}d ago`,canSend:false,order:3};
+  if (!c.lastContacted) return {key:"go",color:"var(--go)",big:"CLEAR",sub:"send intro",canSend:true,order:1};
+  if ((c.followUpCount||0)>=s.maxFollowups) return {key:"rest",color:"var(--rest)",big:"MAX REACHED",sub:`${c.followUpCount} follow-ups, rest?`,canSend:false,order:4};
+  return {key:"due",color:"var(--due)",big:"DUE",sub:`follow-up #${(c.followUpCount||0)+1}`,canSend:true,order:2};
+}
+
+const SAMPLES = [
+  {name:"Gelson Ribeiro",company:"Grupo Obenaus",channel:"whatsapp",phone:"5551999887766",email:"",language:"pt",segment:"Brazil · MAN + VW truck parts",notes:"Interested in VW Truck & Bus surplus, asked about BRL pricing and freight to Porto Alegre.",status:"replied",lastContacted:now()-2*DAY,followUpCount:0,cadenceDays:7},
+  {name:"Marcos Nasa",company:"Nasa Caminhões",channel:"both",phone:"5541988776655",email:"compras@nasacaminhoes.com.br",language:"pt",segment:"Brazil · heavy truck dealer",notes:"Sent full VW parts catalog link. Awaiting reply on first batch of 40 SKUs.",status:"contacted",lastContacted:now()-9*DAY,followUpCount:1,cadenceDays:7},
+  {name:"Krzysztof Nowak",company:"TruckParts PL",channel:"email",phone:"",email:"k.nowak@truckparts.pl",language:"pl",segment:"Poland · MAN/Iveco distributor",notes:"New lead from eBay.de. No contact yet.",status:"new",lastContacted:null,followUpCount:0,cadenceDays:7},
+  {name:"Stefan Bauer",company:"Bauer Nutzfahrzeuge",channel:"email",phone:"",email:"s.bauer@bauer-nfz.de",language:"de",segment:"Germany · Deutz + Mercedes parts",notes:"Followed up twice, no reply since May. Consider resting.",status:"contacted",lastContacted:now()-20*DAY,followUpCount:3,cadenceDays:7},
+];
+
+function App(){
+  const [contacts, setContacts] = useState(() => load("outreach:contacts", []));
+  const [settings, setSettings] = useState(() => ({ ...DEFAULTS, ...load("outreach:settings", {}) }));
+  const [selectedId, setSelectedId] = useState(null);
+  const [mView, setMView] = useState("board");
+  const [filter, setFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState(null);
+
+  useEffect(() => save("outreach:contacts", contacts), [contacts]);
+  useEffect(() => save("outreach:settings", settings), [settings]);
+
+  const selected = contacts.find(c => c.id===selectedId) || null;
+
+  const sorted = useMemo(() => {
+    let list = contacts.map(c => ({c, sig:signalFor(c,settings)}));
+    if (filter!=="all") list = list.filter(({sig}) => sig.key===filter);
+    if (query.trim()){ const q=query.toLowerCase(); list = list.filter(({c}) => [c.name,c.company,c.segment].filter(Boolean).some(x => x.toLowerCase().includes(q))); }
+    list.sort((a,b) => a.sig.order-b.sig.order || (b.c.lastContacted||0)-(a.c.lastContacted||0));
+    return list;
+  }, [contacts, settings, filter, query]);
+
+  const tally = useMemo(() => { const t={go:0,due:0,hold:0,rest:0}; contacts.forEach(c => { const k=signalFor(c,settings).key; if(t[k]!=null)t[k]++; }); return t; }, [contacts, settings]);
+
+  const openContact = (id) => { setSelectedId(id); setMView("pane"); setEditing(null); };
+  const upsert = (contact) => setContacts(prev => { const i=prev.findIndex(c=>c.id===contact.id); if(i===-1) return [...prev,contact]; const cp=[...prev]; cp[i]=contact; return cp; });
+  const patch = (id, fields) => setContacts(prev => prev.map(c => c.id===id ? {...c,...fields} : c));
+  const remove = (id) => { setContacts(prev => prev.filter(c=>c.id!==id)); if(selectedId===id){setSelectedId(null);setMView("board");} };
+  const logTouch = (id, goal) => setContacts(prev => prev.map(c => {
+    if (c.id!==id) return c;
+    const touches=[...(c.touches||[]),{date:now(),goal}];
+    const bump = goal==="followup"||goal==="reengage";
+    return {...c, touches, lastContacted:now(), status:(c.status==="new"||c.status==="resting")?"contacted":c.status, followUpCount: bump ? (c.followUpCount||0)+1 : (c.status==="new"?0:c.followUpCount||0)};
+  }));
+
+  return (
+    <div>
+      <div className="oc-bar">
+        <div className="oc-logo"><span className="dot"></span>Outreach Cockpit</div>
+        <div className="oc-tallies">
+          <span className="oc-tally"><span className="lt" style={{background:"var(--go)"}}></span><span className="n">{tally.go}</span> clear</span>
+          <span className="oc-tally"><span className="lt" style={{background:"var(--due)"}}></span><span className="n">{tally.due}</span> due</span>
+          <span className="oc-tally"><span className="lt" style={{background:"var(--hold)"}}></span><span className="n">{tally.hold}</span> hold</span>
+          <span className="oc-tally"><span className="lt" style={{background:"var(--rest)"}}></span><span className="n">{tally.rest}</span> rest</span>
+        </div>
+      </div>
+
+      <div className="oc-shell">
+        <div className={"oc-board "+(mView==="pane"?"hidden-m":"")}>
+          <div className="oc-toolbar">
+            <input className="oc-search" placeholder="Search name, company, segment…" value={query} onChange={e=>setQuery(e.target.value)} />
+            <button className="oc-btn sm" onClick={()=>{setEditing("new");setMView("pane");setSelectedId(null);}}>+ Contact</button>
+            <button className="oc-btn ghost sm" onClick={()=>setEditing("settings")}>Settings</button>
+          </div>
+          <div className="oc-filters" style={{marginBottom:16}}>
+            {["all","go","due","hold","rest"].map(f =>
+              <button key={f} className={"oc-chip "+(filter===f?"on":"")} onClick={()=>setFilter(f)}>
+                {f==="all"?"ALL":f==="go"?"CLEAR":f==="due"?"DUE":f==="hold"?"HOLD":"REST"}
+              </button>)}
+          </div>
+
+          {contacts.length===0 ? (
+            <div className="oc-empty">
+              <h3>Empty gate</h3>
+              <p>No contacts on the board yet. Add your first buyer, or drop in a few sample leads to see how the signals work.</p>
+              <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+                <button className="oc-btn" onClick={()=>{setEditing("new");setMView("pane");}}>Add a contact</button>
+                <button className="oc-btn ghost" onClick={()=>setContacts(SAMPLES.map(s=>({...s,id:crypto.randomUUID(),touches:[],createdAt:now()})))}>Load samples</button>
+              </div>
+            </div>
+          ) : sorted.length===0 ? (
+            <div className="oc-empty"><p>No contacts match that filter.</p></div>
+          ) : sorted.map(({c,sig}) =>
+            <div key={c.id} className={"oc-row "+(selectedId===c.id?"sel":"")} onClick={()=>openContact(c.id)}>
+              <div className="oc-signal" style={{background:sig.color}}></div>
+              <div className="oc-row-main">
+                <div className="oc-row-top"><span className="oc-name">{c.name}</span>{c.company && <span className="oc-co">· {c.company}</span>}</div>
+                <div className="oc-row-meta">
+                  <span className="oc-flag">{FLAG[c.language]||c.language}</span>
+                  <span className="oc-flag">{c.channel==="both"?"WA+EMAIL":c.channel}</span>
+                  {c.segment && <span className="oc-co" style={{fontSize:12}}>{c.segment}</span>}
+                </div>
+              </div>
+              <div className="oc-status-line oc-mono" style={{color:sig.color}}>
+                <span className="big">{sig.big}</span><span className="sub">{sig.sub}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className={"oc-pane "+(mView==="board"?"hidden-m":"")}>
+          <button className="oc-btn ghost sm oc-back" style={{marginBottom:14}} onClick={()=>{setMView("board");setEditing(null);}}>← Board</button>
+          {editing==="settings" ? (
+            <SettingsPane settings={settings} onSave={s=>{setSettings(s);setEditing(null);}} onCancel={()=>setEditing(null)} />
+          ) : (editing==="new"||editing) ? (
+            <ContactForm initial={editing==="new"?null:editing} onSave={c=>{upsert(c);setSelectedId(c.id);setEditing(null);}} onCancel={()=>setEditing(null)} />
+          ) : selected ? (
+            <Compose contact={selected} settings={settings} sig={signalFor(selected,settings)}
+              onEdit={()=>setEditing(selected)} onDelete={()=>remove(selected.id)}
+              onLog={(goal)=>logTouch(selected.id,goal)}
+              onStatus={(status)=>patch(selected.id, status==="replied"?{status,followUpCount:0}:{status})} />
+          ) : (
+            <div className="oc-empty" style={{padding:"40px 0"}}>
+              <h3>Pick a contact</h3>
+              <p>Select someone on the board to draft a message. The signal tells you whether it's a good moment to reach out.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Compose({contact, settings, sig, onEdit, onDelete, onLog, onStatus}){
+  const [goal,setGoal]=useState(contact.lastContacted?"followup":"intro");
+  const [tone,setTone]=useState("warm");
+  const [lang,setLang]=useState(contact.language||"en");
+  const [subject,setSubject]=useState("");
+  const [body,setBody]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState("");
+
+  useEffect(()=>{setSubject("");setBody("");setErr("");setLang(contact.language||"en");setGoal(contact.lastContacted?"followup":"intro");},[contact.id]);
+
+  async function generate(){
+    if(!settings.apiKey){ setErr("Add your Anthropic API key in Settings to enable drafting. You can still write the message manually below."); return; }
+    setBusy(true);setErr("");setSubject("");setBody("");
+    const goalText={
+      intro:"a first introduction — you have never contacted them before",
+      followup:`a gentle follow-up (this would be follow-up #${(contact.followUpCount||0)+1}) to an earlier message they haven't replied to`,
+      offer:"a message presenting a concrete parts offer / catalog and inviting them to review it",
+      reengage:"a light re-engagement after a long silence, giving them an easy reason to reply",
+    }[goal];
+    const sys=`You write short B2B outreach messages for ${settings.senderName} at ${settings.company}, an official MAN Truck & Bus importer that sells surplus genuine OEM truck & bus parts (MAN, VW Truck & Bus, Mercedes-Benz, Iveco, Deutz and others) to dealers and workshops internationally.
+Write the message in ${LANGS[lang]}. Tone: ${tone}. Keep it to 3-6 short sentences.
+Rules: sound like a real person, not a mass email. Reference the recipient's specific business. Make exactly ONE clear, low-pressure ask. No hype, no "act now", no fake urgency. Friendly and human is good.
+Return ONLY valid JSON, no markdown fences: {"subject":"...","body":"..."}.`;
+    const usr=`Recipient: ${contact.name}${contact.company?`, ${contact.company}`:""}.
+Segment / business: ${contact.segment||"unknown"}.
+Context notes: ${contact.notes||"none"}.
+Purpose of this message: ${goalText}.`;
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"content-type":"application/json","x-api-key":settings.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:settings.model||"claude-sonnet-5",max_tokens:1000,system:sys,messages:[{role:"user",content:usr}]}),
+      });
+      const data=await res.json();
+      if(data.error){ setErr("API error: "+(data.error.message||"check your key and model name.")); setBusy(false); return; }
+      const text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
+      const clean=text.replace(/```json|```/g,"").trim();
+      try{ const p=JSON.parse(clean); setSubject(p.subject||""); setBody(p.body||clean); }
+      catch{ setBody(clean||"Could not parse a message. Try again."); }
+    }catch(e){ setErr("Couldn't reach the API (network or CORS). Your key may be fine — see the README on using a small proxy if this persists."); }
+    finally{ setBusy(false); }
+  }
+
+  const waLink=()=>`https://wa.me/${(contact.phone||"").replace(/\D/g,"")}?text=${encodeURIComponent(body)}`;
+  const mailLink=()=>`mailto:${contact.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const canWA=contact.phone&&(contact.channel==="whatsapp"||contact.channel==="both");
+  const canMail=contact.email&&(contact.channel==="email"||contact.channel==="both");
+
+  return (
+    <div>
+      <div className="oc-pane-h"><span>{contact.name}</span><button className="oc-btn ghost sm" onClick={onEdit}>Edit</button></div>
+      <div className="oc-pane-sub">{contact.company}{contact.segment?` · ${contact.segment}`:""}</div>
+
+      <div className="oc-field">
+        <label>Signal · {sig.big}</label>
+        <div className="oc-seg">
+          <button className={contact.status==="replied"?"on":""} onClick={()=>onStatus("replied")}>They replied</button>
+          <button className={contact.status==="negotiating"?"on":""} onClick={()=>onStatus("negotiating")}>Negotiating</button>
+          <button className={contact.status==="won"?"on":""} onClick={()=>onStatus("won")}>Won</button>
+          <button className={contact.status==="resting"?"on":""} onClick={()=>onStatus("resting")}>Rest</button>
+          <button className={contact.status==="lost"?"on":""} onClick={()=>onStatus("lost")}>Lost</button>
+        </div>
+      </div>
+
+      {!sig.canSend &&
+        <div className={"oc-note "+(sig.key==="rest"?"stop":"")}>
+          {sig.key==="hold" ? `You messaged them ${daysSince(contact.lastContacted)} day(s) ago. Hold off ${sig.big.replace("HOLD ","")} to avoid crowding them.`
+            : sig.key==="rest" ? `This contact has had ${contact.followUpCount||0} follow-ups with no reply. Pushing again risks becoming noise — best to rest and try a fresh angle later.`
+            : "Marked closed. Reopen by changing the signal if things change."}
+        </div>}
+
+      <div className="oc-field">
+        <label>Message purpose</label>
+        <div className="oc-seg">{GOALS.map(g => <button key={g.id} className={goal===g.id?"on":""} onClick={()=>setGoal(g.id)}>{g.label}</button>)}</div>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <div className="oc-field" style={{flex:1}}>
+          <label>Language</label>
+          <select className="oc-select" value={lang} onChange={e=>setLang(e.target.value)}>{Object.entries(LANGS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select>
+        </div>
+        <div className="oc-field" style={{flex:1}}>
+          <label>Tone</label>
+          <select className="oc-select" value={tone} onChange={e=>setTone(e.target.value)}>{TONES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select>
+        </div>
+      </div>
+
+      <button className="oc-btn amber" style={{width:"100%",marginBottom:14}} onClick={generate} disabled={busy}>
+        {busy ? <span><span className="oc-spin"></span>Drafting…</span> : (body?"Redraft message":"Draft message")}
+      </button>
+
+      {err && <div className="oc-note stop">{err}</div>}
+
+      {(body||subject) &&
+        <div>
+          {canMail &&
+            <div className="oc-field"><label>Subject</label><input className="oc-input" value={subject} onChange={e=>setSubject(e.target.value)} /></div>}
+          <div className="oc-field"><label>Message (edit freely before sending)</label><textarea className="oc-area" value={body} onChange={e=>setBody(e.target.value)} /></div>
+          <div className="oc-actions">
+            {canWA && <a className="oc-btn" href={waLink()} target="_blank" rel="noreferrer" onClick={()=>onLog(goal)}>Open WhatsApp</a>}
+            {canMail && <a className="oc-btn" href={mailLink()} onClick={()=>onLog(goal)}>Open email</a>}
+            <button className="oc-btn ghost" onClick={()=>navigator.clipboard&&navigator.clipboard.writeText(body)}>Copy</button>
+            <button className="oc-btn ghost sm" onClick={()=>onLog(goal)}>Mark sent (log only)</button>
+          </div>
+        </div>}
+
+      {!body && !subject &&
+        <div className="oc-field"><label>Message (write manually or draft above)</label><textarea className="oc-area" value={body} onChange={e=>setBody(e.target.value)} placeholder="Type your message here, or click Draft message." /></div>}
+
+      <div className="oc-touch">
+        <h4>Contact log · last {fmtDate(contact.lastContacted)}</h4>
+        {(contact.touches||[]).length===0
+          ? <div className="oc-touch-item"><span className="g">No messages logged yet.</span></div>
+          : [...(contact.touches||[])].reverse().slice(0,8).map((t,i) =>
+              <div key={i} className="oc-touch-item">
+                <span>{(GOALS.find(g=>g.id===t.goal)||{}).label||t.goal}</span>
+                <span className="g">{fmtDate(t.date)}</span>
+              </div>)}
+      </div>
+
+      <div style={{marginTop:18}}>
+        <button className="oc-btn ghost sm" onClick={onDelete} style={{color:"var(--rest)",borderColor:"var(--rest)"}}>Delete contact</button>
+      </div>
+    </div>
+  );
+}
+
+function ContactForm({initial, onSave, onCancel}){
+  const [f,setF]=useState(initial || {name:"",company:"",channel:"whatsapp",phone:"",email:"",language:"en",segment:"",notes:"",status:"new",lastContacted:null,followUpCount:0,cadenceDays:7,touches:[]});
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const doSave=()=>{ if(!f.name.trim())return; onSave({...f,id:f.id||crypto.randomUUID(),createdAt:f.createdAt||now(),touches:f.touches||[]}); };
+  return (
+    <div>
+      <div className="oc-pane-h">{initial?"Edit contact":"New contact"}</div>
+      <div className="oc-pane-sub">The signal system uses these to time your outreach.</div>
+      <div className="oc-field"><label>Name *</label><input className="oc-input" value={f.name} onChange={e=>set("name",e.target.value)} /></div>
+      <div className="oc-field"><label>Company</label><input className="oc-input" value={f.company} onChange={e=>set("company",e.target.value)} /></div>
+      <div className="oc-field"><label>Channel</label>
+        <div className="oc-seg">{["whatsapp","email","both"].map(ch => <button key={ch} className={f.channel===ch?"on":""} onClick={()=>set("channel",ch)}>{ch==="both"?"Both":ch}</button>)}</div>
+      </div>
+      {(f.channel==="whatsapp"||f.channel==="both") &&
+        <div className="oc-field"><label>WhatsApp number (country code, digits only)</label><input className="oc-input oc-mono" placeholder="5551999887766" value={f.phone} onChange={e=>set("phone",e.target.value)} /></div>}
+      {(f.channel==="email"||f.channel==="both") &&
+        <div className="oc-field"><label>Email</label><input className="oc-input" value={f.email} onChange={e=>set("email",e.target.value)} /></div>}
+      <div style={{display:"flex",gap:10}}>
+        <div className="oc-field" style={{flex:1}}><label>Language</label>
+          <select className="oc-select" value={f.language} onChange={e=>set("language",e.target.value)}>{Object.entries(LANGS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></div>
+        <div className="oc-field" style={{flex:1}}><label>Min days between msgs</label>
+          <input className="oc-input oc-mono" type="number" min="1" value={f.cadenceDays} onChange={e=>set("cadenceDays",Number(e.target.value)||7)} /></div>
+      </div>
+      <div className="oc-field"><label>Segment (short)</label><input className="oc-input" placeholder="Brazil · MAN truck dealer" value={f.segment} onChange={e=>set("segment",e.target.value)} /></div>
+      <div className="oc-field"><label>Context notes (feeds the draft)</label><textarea className="oc-area" style={{minHeight:80}} placeholder="What they're interested in, what you last discussed…" value={f.notes} onChange={e=>set("notes",e.target.value)} /></div>
+      <div className="oc-actions">
+        <button className="oc-btn" onClick={doSave} disabled={!f.name.trim()}>Save contact</button>
+        <button className="oc-btn ghost" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function SettingsPane({settings, onSave, onCancel}){
+  const [s,setS]=useState(settings);
+  const set=(k,v)=>setS(p=>({...p,[k]:v}));
+  return (
+    <div>
+      <div className="oc-pane-h">Settings</div>
+      <div className="oc-pane-sub">Sender identity, cadence guardrails, and optional AI drafting.</div>
+      <div className="oc-field"><label>Your name</label><input className="oc-input" value={s.senderName} onChange={e=>set("senderName",e.target.value)} /></div>
+      <div className="oc-field"><label>Company</label><input className="oc-input" value={s.company} onChange={e=>set("company",e.target.value)} /></div>
+      <div className="oc-field"><label>Default days between messages</label><input className="oc-input oc-mono" type="number" min="1" value={s.cadenceDays} onChange={e=>set("cadenceDays",Number(e.target.value)||7)} /></div>
+      <div className="oc-field"><label>Max follow-ups before "rest"</label><input className="oc-input oc-mono" type="number" min="1" value={s.maxFollowups} onChange={e=>set("maxFollowups",Number(e.target.value)||3)} /></div>
+      <div className="oc-note">After this many unanswered follow-ups, a contact turns red and the board tells you to back off rather than keep pushing.</div>
+      <div className="oc-field"><label>Anthropic API key (optional — for drafting)</label><input className="oc-input oc-mono" type="password" placeholder="sk-ant-..." value={s.apiKey} onChange={e=>set("apiKey",e.target.value)} /></div>
+      <div className="oc-field"><label>Model</label><input className="oc-input oc-mono" value={s.model} onChange={e=>set("model",e.target.value)} /></div>
+      <div className="oc-note">Your key is stored only in this browser (localStorage) and sent directly to Anthropic. Anyone with access to this browser profile can read it. Leave blank to use the cockpit as a pure tracker with manual message writing.</div>
+      <div className="oc-actions">
+        <button className="oc-btn" onClick={()=>onSave(s)}>Save</button>
+        <button className="oc-btn ghost" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
