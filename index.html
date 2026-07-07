@@ -464,6 +464,7 @@ const TONES = [{
   id: "formal",
   label: "Formal"
 }];
+const CATALOG_URL = "https://dukosteevensz251786.github.io/order-List-EN/catalog-en/index.html";
 const DAY = 86400000;
 const now = () => Date.now();
 const daysSince = ts => ts ? Math.floor((now() - ts) / DAY) : null;
@@ -972,11 +973,15 @@ function Compose({
   const [err, setErr] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [incoming, setIncoming] = useState("");
+  const [interested, setInterested] = useState(false);
   useEffect(() => {
     setSubject("");
     setBody("");
     setErr("");
     setSent(false);
+    setIncoming("");
+    setInterested(false);
     setLang(contact.language || "en");
     setGoal(contact.lastContacted ? "followup" : "intro");
   }, [contact.id]);
@@ -989,23 +994,26 @@ function Compose({
     setErr("");
     setSubject("");
     setBody("");
-    const goalText = {
+    setInterested(false);
+    const replying = incoming.trim().length > 0;
+    const goalText = replying ? "a reply to the message the recipient just sent you (shown below). Answer their questions directly, address what they raised, and move things forward toward sharing our surplus stock." : {
       intro: "a first introduction — you have never contacted them before",
       followup: `a gentle follow-up (this would be follow-up #${(contact.followUpCount || 0) + 1}) to an earlier message they haven't replied to`,
       offer: "a message presenting a concrete parts offer / catalog and inviting them to review it",
       reengage: "a light re-engagement after a long silence, giving them an easy reason to reply"
     }[goal];
-    const sys = `You write short B2B outreach messages for ${settings.senderName} at ${settings.company}, an official MAN Truck & Bus importer and authorised dealer. The company is clearing a ONE-TIME SURPLUS / overstock of genuine OE truck & bus parts from its own inventory (MAN, VW Truck & Bus, Mercedes-Benz, Iveco, Deutz and others), available while stock lasts.
+    const sys = `You write short B2B messages for ${settings.senderName} at ${settings.company}, an official MAN Truck & Bus importer and authorised dealer. The company is clearing a ONE-TIME SURPLUS / overstock of genuine OE truck & bus parts from its own inventory (MAN, VW Truck & Bus, Mercedes-Benz, Iveco, Deutz and others), available while stock lasts.
 Write the message in ${LANGS[lang]}. Tone: ${tone}. Keep it to 3-6 short sentences.
 Rules: sound like a real person, not a mass email. Reference the recipient's specific business. Make exactly ONE clear, low-pressure ask. No hype, no "act now", no fake urgency. Friendly and human is good.
 Sign the message as "${settings.senderName}" from ${settings.company}. Never use placeholders such as [Your Name], [Company], or [Contact] — always use the real values given. Do not invent a recipient name; if none is given, greet the company or team.
-CRITICAL POSITIONING: Van Vliet is and remains an official MAN dealer, NOT a wholesaler, distributor, or ongoing parts supplier. Make clear this is a surplus / overstock clearance from our own stock — a one-off opportunity while stock lasts. NEVER imply we specialise in supplying parts, that we want to become their regular or long-term supplier, or that we are offering an ongoing partnership. Avoid the words "specialise in supplying", "supplier", "distributor", and "ongoing collaboration/partnership". Prefer phrasing like "we currently have surplus stock available" or "we are clearing overstock". The single ask should be whether they'd like to receive the surplus parts list — not open-ended collaboration.
+CRITICAL POSITIONING: Van Vliet is and remains an official MAN dealer, NOT a wholesaler, distributor, or ongoing parts supplier. Make clear this is a surplus / overstock clearance from our own stock — a one-off opportunity while stock lasts. NEVER imply we specialise in supplying parts, that we want to become their regular or long-term supplier, or that we are offering an ongoing partnership. Avoid the words "specialise in supplying", "supplier", "distributor", and "ongoing collaboration/partnership". Prefer phrasing like "we currently have surplus stock available" or "we are clearing overstock".
 TERMINOLOGY: Always describe the products as "genuine OE parts" (original-equipment). Do NOT write "genuine OEM", "OEM parts" alone, or "aftermarket" — use "genuine OE parts" consistently.
-Return ONLY valid JSON: {"subject":"...","body":"..."}.`;
+INTEREST: Read the recipient carefully. Set "interested" to true if they express interest, ask about availability/price/fit, or want to continue; false otherwise. When "interested" is true, invite them to view our current surplus catalogue and mention the full stock list is attached — you may include this catalogue link in the message: ${CATALOG_URL}
+Return ONLY valid JSON: {"subject":"...","body":"...","interested": true or false}.`;
     const usr = `Recipient: ${contact.name}${contact.company ? `, ${contact.company}` : ""}.
 Segment / business: ${contact.segment || "unknown"}.
 Context notes: ${contact.notes || "none"}.
-Purpose of this message: ${goalText}.`;
+Purpose of this message: ${goalText}.${replying ? `\n\nThe message you are replying to:\n"""\n${incoming.trim()}\n"""` : ""}`;
     try {
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -1040,6 +1048,7 @@ Purpose of this message: ${goalText}.`;
         const p = JSON.parse(clean);
         setSubject(p.subject || "");
         setBody(p.body || clean);
+        setInterested(!!p.interested);
       } catch {
         setBody(clean || "Could not parse a message. Try again.");
       }
@@ -1134,7 +1143,21 @@ Purpose of this message: ${goalText}.`;
     className: "oc-note " + (sig.key === "rest" ? "stop" : "")
   }, sig.key === "hold" ? `You messaged them ${daysSince(contact.lastContacted)} day(s) ago. Hold off ${sig.big.replace("HOLD ", "")} to avoid crowding them.` : sig.key === "rest" ? `This contact has had ${contact.followUpCount || 0} follow-ups with no reply. Pushing again risks becoming noise — best to rest and try a fresh angle later.` : "Marked closed. Reopen by changing the signal if things change."), /*#__PURE__*/React.createElement("div", {
     className: "oc-field"
-  }, /*#__PURE__*/React.createElement("label", null, "Message purpose"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("label", null, "Their message — paste a reply here to respond to it (optional)"), /*#__PURE__*/React.createElement("textarea", {
+    className: "oc-area",
+    style: {
+      minHeight: 70
+    },
+    value: incoming,
+    onChange: e => setIncoming(e.target.value),
+    placeholder: "Paste the customer's email/message here. Leaving this blank drafts a normal outreach message."
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "oc-field",
+    style: incoming.trim() ? {
+      opacity: .5,
+      pointerEvents: "none"
+    } : {}
+  }, /*#__PURE__*/React.createElement("label", null, "Message purpose ", incoming.trim() && "(ignored — replying to their message)"), /*#__PURE__*/React.createElement("div", {
     className: "oc-seg"
   }, GOALS.map(g => /*#__PURE__*/React.createElement("button", {
     key: g.id,
@@ -1179,7 +1202,37 @@ Purpose of this message: ${goalText}.`;
     disabled: busy
   }, busy ? /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("span", {
     className: "oc-spin"
-  }), "Drafting…") : body ? "Redraft message" : "Draft message"), err && /*#__PURE__*/React.createElement("div", {
+  }), "Drafting…") : incoming.trim() ? body ? "Redraft reply" : "Draft reply" : body ? "Redraft message" : "Draft message"), interested && /*#__PURE__*/React.createElement("div", {
+    className: "oc-note",
+    style: {
+      background: "#E4F3E8",
+      borderColor: "#A9D8B8",
+      color: "#1F5E33"
+    }
+  }, /*#__PURE__*/React.createElement("b", null, "Looks like interest."), " Before sending, share the catalogue and attach the surplus stock Excel file.", /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8,
+      wordBreak: "break-all",
+      fontFamily: "'JetBrains Mono',monospace",
+      fontSize: 11
+    }
+  }, CATALOG_URL), /*#__PURE__*/React.createElement("div", {
+    className: "oc-actions",
+    style: {
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "oc-btn sm",
+    onClick: () => setBody(body + (body.endsWith("\n") ? "" : "\n\n") + "Our current surplus catalogue: " + CATALOG_URL)
+  }, "Insert link into message"), /*#__PURE__*/React.createElement("button", {
+    className: "oc-btn ghost sm",
+    onClick: () => navigator.clipboard && navigator.clipboard.writeText(CATALOG_URL)
+  }, "Copy link")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8,
+      fontSize: 11.5
+    }
+  }, "⚠ Don't forget to ", /*#__PURE__*/React.createElement("b", null, "attach the surplus Excel file"), " — the send can't attach files automatically.")), err && /*#__PURE__*/React.createElement("div", {
     className: "oc-note stop"
   }, err), (body || subject) && /*#__PURE__*/React.createElement("div", null, canMail && /*#__PURE__*/React.createElement("div", {
     className: "oc-field"
