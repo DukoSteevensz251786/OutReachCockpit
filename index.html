@@ -474,7 +474,12 @@ const DEFAULTS = {
   cadenceDays: 7,
   maxFollowups: 3,
   apiKey: "",
-  model: "gpt-4o-mini"
+  model: "gpt-4o-mini",
+  sendUrl: "",
+  sendSecret: "",
+  fromEmail: "",
+  replyTo: "",
+  dailyCap: 40
 };
 
 // ---- localStorage helpers ----
@@ -490,6 +495,22 @@ const save = (k, v) => {
   try {
     localStorage.setItem(k, JSON.stringify(v));
   } catch {}
+};
+const today = () => new Date().toISOString().slice(0, 10);
+const sendCountToday = () => {
+  const r = load("outreach:sendcount", {
+    date: "",
+    n: 0
+  });
+  return r.date === today() ? r.n : 0;
+};
+const bumpSendCount = () => {
+  const n = sendCountToday() + 1;
+  save("outreach:sendcount", {
+    date: today(),
+    n
+  });
+  return n;
 };
 function signalFor(c, s) {
   const cad = c.cadenceDays || s.cadenceDays;
@@ -694,6 +715,40 @@ function App() {
       followUpCount: bump ? (c.followUpCount || 0) + 1 : c.status === "new" ? 0 : c.followUpCount || 0
     };
   }));
+  const addMany = rows => setContacts(prev => {
+    const seen = new Set(prev.map(c => (c.email || "").toLowerCase() || (c.name + "|" + c.company).toLowerCase()));
+    const fresh = [];
+    for (const r of rows) {
+      const key = (r.email || "").toLowerCase() || (r.name + "|" + r.company).toLowerCase();
+      if (!r.name || seen.has(key)) continue;
+      seen.add(key);
+      fresh.push({
+        ...r,
+        id: crypto.randomUUID(),
+        touches: [],
+        createdAt: now(),
+        status: "new",
+        lastContacted: null,
+        followUpCount: 0,
+        cadenceDays: r.cadenceDays || settings.cadenceDays
+      });
+    }
+    return [...prev, ...fresh];
+  });
+  const exportJSON = () => {
+    const blob = new Blob([JSON.stringify(contacts, null, 2)], {
+      type: "application/json"
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "outreach-contacts-" + new Date().toISOString().slice(0, 10) + ".json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const restoreJSON = arr => setContacts(arr.map(c => ({
+    ...c,
+    id: c.id || crypto.randomUUID()
+  })));
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "oc-bar"
   }, /*#__PURE__*/React.createElement("div", {
@@ -757,6 +812,13 @@ function App() {
       setSelectedId(null);
     }
   }, "+ Contact"), /*#__PURE__*/React.createElement("button", {
+    className: "oc-btn ghost sm",
+    onClick: () => {
+      setEditing("import");
+      setMView("pane");
+      setSelectedId(null);
+    }
+  }, "Import"), /*#__PURE__*/React.createElement("button", {
     className: "oc-btn ghost sm",
     onClick: () => setEditing("settings")
   }, "Settings")), /*#__PURE__*/React.createElement("div", {
@@ -851,6 +913,19 @@ function App() {
       setEditing(null);
     },
     onCancel: () => setEditing(null)
+  }) : editing === "import" ? /*#__PURE__*/React.createElement(ImportPane, {
+    onAdd: rows => {
+      addMany(rows);
+      setEditing(null);
+      setMView("board");
+    },
+    onExport: exportJSON,
+    onRestore: arr => {
+      restoreJSON(arr);
+      setEditing(null);
+      setMView("board");
+    },
+    onCancel: () => setEditing(null)
   }) : editing === "new" || editing ? /*#__PURE__*/React.createElement(ContactForm, {
     initial: editing === "new" ? null : editing,
     onSave: c => {
@@ -895,10 +970,13 @@ function Compose({
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
   useEffect(() => {
     setSubject("");
     setBody("");
     setErr("");
+    setSent(false);
     setLang(contact.language || "en");
     setGoal(contact.lastContacted ? "followup" : "intro");
   }, [contact.id]);
@@ -920,9 +998,9 @@ function Compose({
     const sys = `You write short B2B outreach messages for ${settings.senderName} at ${settings.company}, an official MAN Truck & Bus importer and authorised dealer. The company is clearing a ONE-TIME SURPLUS / overstock of genuine OE truck & bus parts from its own inventory (MAN, VW Truck & Bus, Mercedes-Benz, Iveco, Deutz and others), available while stock lasts.
 Write the message in ${LANGS[lang]}. Tone: ${tone}. Keep it to 3-6 short sentences.
 Rules: sound like a real person, not a mass email. Reference the recipient's specific business. Make exactly ONE clear, low-pressure ask. No hype, no "act now", no fake urgency. Friendly and human is good.
-CRITICAL POSITIONING: Van Vliet is and remains an official MAN dealer, NOT a wholesaler, distributor, or ongoing parts supplier. Make clear this is a surplus / overstock clearance from our own stock \u2014 a one-off opportunity while stock lasts. NEVER imply we specialise in supplying parts, that we want to become their regular or long-term supplier, or that we are offering an ongoing partnership. Avoid the words "specialise in supplying", "supplier", "distributor", and "ongoing collaboration/partnership". Prefer phrasing like "we currently have surplus stock available" or "we are clearing overstock". The single ask should be whether they'd like to receive the surplus parts list \u2014 not open-ended collaboration.
-TERMINOLOGY: Always describe the products as "genuine OE parts" (original-equipment). Do NOT write "genuine OEM", "OEM parts" alone, or "aftermarket" \u2014 use "genuine OE parts" consistently.
-Sign the message as "${settings.senderName}" from ${settings.company}. Never use placeholders such as [Your Name], [Company], or [Contact] \u2014 always use the real values given. Do not invent a recipient name; if none is given, greet the company or team.
+Sign the message as "${settings.senderName}" from ${settings.company}. Never use placeholders such as [Your Name], [Company], or [Contact] — always use the real values given. Do not invent a recipient name; if none is given, greet the company or team.
+CRITICAL POSITIONING: Van Vliet is and remains an official MAN dealer, NOT a wholesaler, distributor, or ongoing parts supplier. Make clear this is a surplus / overstock clearance from our own stock — a one-off opportunity while stock lasts. NEVER imply we specialise in supplying parts, that we want to become their regular or long-term supplier, or that we are offering an ongoing partnership. Avoid the words "specialise in supplying", "supplier", "distributor", and "ongoing collaboration/partnership". Prefer phrasing like "we currently have surplus stock available" or "we are clearing overstock". The single ask should be whether they'd like to receive the surplus parts list — not open-ended collaboration.
+TERMINOLOGY: Always describe the products as "genuine OE parts" (original-equipment). Do NOT write "genuine OEM", "OEM parts" alone, or "aftermarket" — use "genuine OE parts" consistently.
 Return ONLY valid JSON: {"subject":"...","body":"..."}.`;
     const usr = `Recipient: ${contact.name}${contact.company ? `, ${contact.company}` : ""}.
 Segment / business: ${contact.segment || "unknown"}.
@@ -969,6 +1047,57 @@ Purpose of this message: ${goalText}.`;
       setErr("Couldn't reach the API (network or CORS). Check your key, or see the README on using a small proxy.");
     } finally {
       setBusy(false);
+    }
+  }
+  async function sendNow() {
+    if (!settings.sendUrl) {
+      setErr("Set the Send backend URL in Settings first.");
+      return;
+    }
+    if (!settings.fromEmail) {
+      setErr("Set your From email in Settings first.");
+      return;
+    }
+    const cap = settings.dailyCap || 40;
+    if (sendCountToday() >= cap) {
+      setErr(`Daily send cap reached (${cap}). This protects your domain \u2014 resume tomorrow, or raise the cap in Settings.`);
+      return;
+    }
+    if (!subject.trim() || !body.trim()) {
+      setErr("Nothing to send \u2014 draft or write a subject and message first.");
+      return;
+    }
+    setSending(true);
+    setErr("");
+    try {
+      const res = await fetch(settings.sendUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(settings.sendSecret ? {
+            "Authorization": "Bearer " + settings.sendSecret
+          } : {})
+        },
+        body: JSON.stringify({
+          to: contact.email,
+          subject,
+          body,
+          from: settings.fromEmail,
+          replyTo: settings.replyTo || settings.fromEmail
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        setErr("Send failed: " + (data.error || "status " + res.status));
+      } else {
+        bumpSendCount();
+        onLog(goal);
+        setSent(true);
+      }
+    } catch (e) {
+      setErr("Couldn't reach the send backend (URL wrong, or CORS not allowing this site).");
+    } finally {
+      setSending(false);
     }
   }
   const waLink = () => `https://wa.me/${(contact.phone || "").replace(/\D/g, "")}?text=${encodeURIComponent(body)}`;
@@ -1076,13 +1205,24 @@ Purpose of this message: ${goalText}.`;
     className: "oc-btn",
     href: mailLink(),
     onClick: () => onLog(goal)
-  }, "Open email"), /*#__PURE__*/React.createElement("button", {
+  }, "Open email"), canMail && settings.sendUrl && /*#__PURE__*/React.createElement("button", {
+    className: "oc-btn amber",
+    onClick: sendNow,
+    disabled: sending || sent
+  }, sending ? /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("span", {
+    className: "oc-spin"
+  }), "Sending…") : sent ? "Sent ✓" : "Send now (server)"), /*#__PURE__*/React.createElement("button", {
     className: "oc-btn ghost",
     onClick: () => navigator.clipboard && navigator.clipboard.writeText(body)
   }, "Copy"), /*#__PURE__*/React.createElement("button", {
     className: "oc-btn ghost sm",
     onClick: () => onLog(goal)
-  }, "Mark sent (log only)"))), !body && !subject && /*#__PURE__*/React.createElement("div", {
+  }, "Mark sent (log only)")), canMail && settings.sendUrl && /*#__PURE__*/React.createElement("div", {
+    className: "oc-note",
+    style: {
+      marginTop: 10
+    }
+  }, "Server send adds your sender identity and an opt-out line automatically. ", sendCountToday(), " sent today (cap ", settings.dailyCap || 40, ").")), !body && !subject && /*#__PURE__*/React.createElement("div", {
     className: "oc-field"
   }, /*#__PURE__*/React.createElement("label", null, "Message (write manually or draft above)"), /*#__PURE__*/React.createElement("textarea", {
     className: "oc-area",
@@ -1300,6 +1440,51 @@ function SettingsPane({
   })), /*#__PURE__*/React.createElement("div", {
     className: "oc-note"
   }, "Your key is stored only in this browser (localStorage) and sent directly to OpenAI. Anyone with access to this browser profile can read it. Leave blank to use the cockpit as a pure tracker with manual message writing."), /*#__PURE__*/React.createElement("div", {
+    className: "oc-pane-h",
+    style: {
+      fontSize: 13,
+      marginTop: 22
+    }
+  }, "Auto-send (optional)"), /*#__PURE__*/React.createElement("div", {
+    className: "oc-pane-sub"
+  }, "Sends email through your own backend, which holds the keys and adds an opt-out line. Leave the URL blank to keep sending manual."), /*#__PURE__*/React.createElement("div", {
+    className: "oc-field"
+  }, /*#__PURE__*/React.createElement("label", null, "Send backend URL (your Cloudflare Worker)"), /*#__PURE__*/React.createElement("input", {
+    className: "oc-input oc-mono",
+    placeholder: "https://…workers.dev",
+    value: s.sendUrl || "",
+    onChange: e => set("sendUrl", e.target.value)
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "oc-field"
+  }, /*#__PURE__*/React.createElement("label", null, "Send secret (matches SEND_SECRET in the Worker)"), /*#__PURE__*/React.createElement("input", {
+    className: "oc-input oc-mono",
+    type: "password",
+    value: s.sendSecret || "",
+    onChange: e => set("sendSecret", e.target.value)
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "oc-field"
+  }, /*#__PURE__*/React.createElement("label", null, "From email (verified domain in Resend)"), /*#__PURE__*/React.createElement("input", {
+    className: "oc-input",
+    placeholder: "duko@vanvliet-automotive.nl",
+    value: s.fromEmail || "",
+    onChange: e => set("fromEmail", e.target.value)
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "oc-field"
+  }, /*#__PURE__*/React.createElement("label", null, "Reply-to (optional)"), /*#__PURE__*/React.createElement("input", {
+    className: "oc-input",
+    value: s.replyTo || "",
+    onChange: e => set("replyTo", e.target.value)
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "oc-field"
+  }, /*#__PURE__*/React.createElement("label", null, "Daily send cap"), /*#__PURE__*/React.createElement("input", {
+    className: "oc-input oc-mono",
+    type: "number",
+    min: "1",
+    value: s.dailyCap || 40,
+    onChange: e => set("dailyCap", Number(e.target.value) || 40)
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "oc-note"
+  }, "The cap throttles you to protect deliverability. Cold bulk email is regulated (Germany especially) — keep it relevant, low-volume, and always honour opt-outs."), /*#__PURE__*/React.createElement("div", {
     className: "oc-actions"
   }, /*#__PURE__*/React.createElement("button", {
     className: "oc-btn",
@@ -1308,6 +1493,183 @@ function SettingsPane({
     className: "oc-btn ghost",
     onClick: onCancel
   }, "Cancel")));
+}
+
+// Forgiving CSV/TSV parser: header row maps columns; handles quoted fields, comma or tab.
+function parseContacts(text) {
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+  if (!lines.length) return [];
+  const delim = lines[0].includes("\t") ? "\t" : ",";
+  const splitLine = line => {
+    const out = [];
+    let cur = "";
+    let q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) {
+        if (ch === '"') {
+          if (line[i + 1] === '"') {
+            cur += '"';
+            i++;
+          } else q = false;
+        } else cur += ch;
+      } else {
+        if (ch === '"') q = true;else if (ch === delim) {
+          out.push(cur);
+          cur = "";
+        } else cur += ch;
+      }
+    }
+    out.push(cur);
+    return out.map(s => s.trim());
+  };
+  const headerCells = splitLine(lines[0]).map(h => h.toLowerCase());
+  const known = ["name", "company", "phone", "email", "language", "segment", "notes", "channel"];
+  const hasHeader = headerCells.some(h => known.includes(h));
+  const cols = hasHeader ? headerCells : ["name", "company", "email", "phone", "language", "segment", "notes"];
+  const dataLines = hasHeader ? lines.slice(1) : lines;
+  const langGuess = v => {
+    v = (v || "").toLowerCase().trim();
+    if (LANGS[v]) return v;
+    const map = {
+      portuguese: "pt",
+      "português": "pt",
+      portugues: "pt",
+      german: "de",
+      deutsch: "de",
+      polish: "pl",
+      polski: "pl",
+      english: "en",
+      spanish: "es",
+      "español": "es",
+      espanol: "es",
+      french: "fr",
+      "français": "fr",
+      francais: "fr",
+      dutch: "nl",
+      nederlands: "nl"
+    };
+    if (map[v]) return map[v];
+    const two = v.slice(0, 2);
+    return LANGS[two] ? two : "en";
+  };
+  return dataLines.map(line => {
+    const cells = splitLine(line);
+    const rec = {};
+    cols.forEach((c, i) => {
+      rec[c] = cells[i] || "";
+    });
+    const phone = (rec.phone || "").replace(/[^\d]/g, "");
+    const email = rec.email || "";
+    let channel = (rec.channel || "").toLowerCase();
+    if (!["whatsapp", "email", "both"].includes(channel)) channel = phone && email ? "both" : phone ? "whatsapp" : "email";
+    return {
+      name: rec.name || "",
+      company: rec.company || "",
+      phone,
+      email,
+      channel,
+      language: langGuess(rec.language),
+      segment: rec.segment || "",
+      notes: rec.notes || ""
+    };
+  }).filter(r => r.name);
+}
+function ImportPane({
+  onAdd,
+  onExport,
+  onRestore,
+  onCancel
+}) {
+  const [text, setText] = useState("");
+  const parsed = React.useMemo(() => {
+    try {
+      return parseContacts(text);
+    } catch {
+      return [];
+    }
+  }, [text]);
+  const doRestore = e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const arr = JSON.parse(rd.result);
+        if (Array.isArray(arr)) onRestore(arr);else alert("That file isn't a contacts backup.");
+      } catch {
+        alert("Couldn't read that file as JSON.");
+      }
+    };
+    rd.readAsText(file);
+  };
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "oc-pane-h"
+  }, "Import & backup"), /*#__PURE__*/React.createElement("div", {
+    className: "oc-pane-sub"
+  }, "Paste a list to add many contacts at once, or back up your board."), /*#__PURE__*/React.createElement("div", {
+    className: "oc-field"
+  }, /*#__PURE__*/React.createElement("label", null, "Paste contacts (CSV or tab-separated)"), /*#__PURE__*/React.createElement("textarea", {
+    className: "oc-area",
+    style: {
+      minHeight: 150,
+      fontFamily: "'JetBrains Mono',monospace",
+      fontSize: 12.5
+    },
+    value: text,
+    onChange: e => setText(e.target.value),
+    placeholder: "name,company,email,phone,language,segment,notes\nMarcos Silva,Nasa Caminhões,compras@nasa.com.br,5541988776655,pt,Brazil truck dealer,From eBay\nStefan Bauer,Bauer Nfz,s.bauer@bauer.de,,de,Germany Deutz parts,"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "oc-note"
+  }, "First row can be a header. Recognised columns: name, company, email, phone, language, segment, notes, channel. Only ", /*#__PURE__*/React.createElement("b", null, "name"), " is required. Channel and language are guessed if left out. Duplicates (same email, or same name+company) are skipped."), parsed.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "oc-note",
+    style: {
+      background: "#E4F3E8",
+      borderColor: "#A9D8B8",
+      color: "#1F5E33"
+    }
+  }, parsed.length, " contact", parsed.length > 1 ? "s" : "", " ready to import — first: ", /*#__PURE__*/React.createElement("b", null, parsed[0].name), parsed[0].company ? ` (${parsed[0].company})` : "", "."), /*#__PURE__*/React.createElement("div", {
+    className: "oc-actions",
+    style: {
+      marginBottom: 24
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "oc-btn",
+    onClick: () => onAdd(parsed),
+    disabled: !parsed.length
+  }, "Import ", parsed.length || "", " contact", parsed.length === 1 ? "" : "s"), /*#__PURE__*/React.createElement("button", {
+    className: "oc-btn ghost",
+    onClick: onCancel
+  }, "Cancel")), /*#__PURE__*/React.createElement("div", {
+    className: "oc-pane-h",
+    style: {
+      fontSize: 13
+    }
+  }, "Backup"), /*#__PURE__*/React.createElement("div", {
+    className: "oc-pane-sub"
+  }, "Your data lives only in this browser. Export a copy so a cache wipe can't erase your pipeline."), /*#__PURE__*/React.createElement("div", {
+    className: "oc-actions"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "oc-btn ghost sm",
+    onClick: onExport
+  }, "Download backup (.json)"), /*#__PURE__*/React.createElement("label", {
+    className: "oc-btn ghost sm",
+    style: {
+      cursor: "pointer"
+    }
+  }, "Restore from file", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: "application/json,.json",
+    style: {
+      display: "none"
+    },
+    onChange: doRestore
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "oc-note stop",
+    style: {
+      marginTop: 12
+    }
+  }, "Restoring replaces your current board with the file's contents."));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
 </script>
